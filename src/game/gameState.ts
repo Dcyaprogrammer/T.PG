@@ -1,5 +1,6 @@
-import type{ Card, Suit } from './card';
-import { createDeck, shuffle, Rng } from './deck'; 
+import type { Card, Suit } from './card';
+import { createDeck, shuffle, Rng } from './deck';
+import { Pile } from './pile';
 
 export interface SpiderOptions {
     columns?: number;
@@ -19,7 +20,7 @@ export class GameState {
     readonly numDecks: number;
     private readonly rng: Rng;
 
-    tableau: Card[][];     // 10 列牌面
+    tableau: Pile[];       // 10 列牌面
     stock: Card[];         // 库牌（用于发行整行）
     completed: Card[][];   // 已完成的 K→A 顺子堆
     moves: Move[];         // 操作历史（撤销/重做用）
@@ -30,7 +31,7 @@ export class GameState {
         this.numDecks = options.numDecks ?? 2;
         this.rng = options.rng ?? Math.random;
     
-        this.tableau = Array.from({ length: this.columns }, () => []);
+        this.tableau = [];
         this.stock = [];
         this.completed = [];
         this.moves = [];
@@ -50,14 +51,16 @@ export class GameState {
             : Array.from({ length: this.columns }, () => 5); // 兜底
 
         let cursor = 0;
+        this.tableau = Array.from({ length: this.columns }, () => new Pile());
+
         for (let col = 0; col < this.columns; col++) {
             const count = initialDealCounts[col] ?? 5;
-            const pile: Card[] = [];
+            const pileCards: Card[] = [];
             for (let i = 0; i < count; i++) {
-            const c = deck[cursor++];
-            pile.push({ ...c, faceUp: i === count - 1 }); // 仅顶牌翻面
+                const c = deck[cursor++];
+                pileCards.push({ ...c, faceUp: i === count - 1 }); // 仅顶牌翻面
             }
-            this.tableau[col] = pile;
+            this.tableau[col] = new Pile(pileCards);
         }
 
         // 3) 剩余作为库存（用于每次“发一行”）
@@ -68,11 +71,11 @@ export class GameState {
     dealRow(): void {
         if (!this.canDealRow()) return;
         for (let col = 0; col < this.columns; col++) {
-          const top = this.stock.pop();
-          if (top) {
-            // 规则：发到每列顶部，发出的牌应为翻面
-            this.tableau[col].push({ ...top, faceUp: true });
-          }
+            const top = this.stock.pop();
+            if (top) {
+                // 规则：发到每列顶部，发出的牌应为翻面
+                this.tableau[col].push({ ...top, faceUp: true });
+            }
         }
         this.moves.push({ kind: 'deal' });
       }
@@ -98,8 +101,13 @@ export class GameState {
 
     /** 检查某列顶端是否形成完整 K→A 顺子，若是则收集到 completed（骨架） */
     tryCollectCompleteSequence(col: number): boolean {
-        // TODO: 扫描顶端 13 张是否为同花色且 K→A 连续；若是则移除并放入 completed
-        return false;
+        const pile = this.tableau[col];
+        const sequence = pile.collectCompleteSequence();
+        if (!sequence || sequence.length === 0) {
+            return false;
+        }
+        this.completed.push(sequence);
+        return true;
     }
 
     /** 游戏是否胜利（所有顺子已收集完） */
