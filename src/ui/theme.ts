@@ -16,11 +16,9 @@ export const themeColors = {
 } as const;
 
 export const startScreenShortcuts: CommandShortcut[] = [
-  { command: '/new', description: 'new session', hint: 'ctrl+x n' },
-  { command: '/help', description: 'show help', hint: 'ctrl+x h' },
-  { command: '/share', description: 'share session', hint: 'ctrl+x s' },
-  { command: '/models', description: 'list models', hint: 'ctrl+x m' },
-  { command: '/agents', description: 'list agents', hint: 'ctrl+x a' },
+  { command: 'start spider', description: 'start new game', hint: ':start' },
+  { command: '/help', description: 'show help', hint: ':help' },
+  { command: '/quit', description: 'quit game', hint: ':quit' },
 ];
 
 export const layoutMetrics = {

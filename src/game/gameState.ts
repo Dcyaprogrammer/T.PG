@@ -1,5 +1,5 @@
 import type { Card, Suit } from './card';
-import { createDeck, shuffle, Rng } from './deck';
+import { createDeck, shuffle, Rng } from './deck'; 
 import { Pile } from './pile';
 
 export interface SpiderOptions {
@@ -57,7 +57,7 @@ export class GameState {
             const count = initialDealCounts[col] ?? 5;
             const pileCards: Card[] = [];
             for (let i = 0; i < count; i++) {
-                const c = deck[cursor++];
+            const c = deck[cursor++];
                 pileCards.push({ ...c, faceUp: i === count - 1 }); // 仅顶牌翻面
             }
             this.tableau[col] = new Pile(pileCards);
@@ -71,11 +71,11 @@ export class GameState {
     dealRow(): void {
         if (!this.canDealRow()) return;
         for (let col = 0; col < this.columns; col++) {
-            const top = this.stock.pop();
-            if (top) {
-                // 规则：发到每列顶部，发出的牌应为翻面
-                this.tableau[col].push({ ...top, faceUp: true });
-            }
+          const top = this.stock.pop();
+          if (top) {
+            // 规则：发到每列顶部，发出的牌应为翻面
+            this.tableau[col].push({ ...top, faceUp: true });
+          }
         }
         this.moves.push({ kind: 'deal' });
       }
@@ -104,7 +104,7 @@ export class GameState {
         const pile = this.tableau[col];
         const sequence = pile.collectCompleteSequence();
         if (!sequence || sequence.length === 0) {
-            return false;
+        return false;
         }
         this.completed.push(sequence);
         return true;

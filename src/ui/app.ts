@@ -3,6 +3,8 @@ import { GameState } from '../game/gameState';
 import { createBoardView } from './components/BoardView';
 import { layoutMetrics, startScreenShortcuts, themeColors, type CommandShortcut } from './theme';
 
+type UiMode = 'start' | 'game';
+
 export async function startUi(game: GameState) {
   const palette = themeColors;
   const renderer = await createCliRenderer({
@@ -22,20 +24,97 @@ export async function startUi(game: GameState) {
   });
   renderer.root.add(layout);
 
+  let currentMode: UiMode = 'start';
+  let inCommandMode = false;
+
   const header = buildHeader(renderer, palette);
   layout.add(header);
 
   const boardView = createBoardView(renderer, game);
+  boardView.container.visible = false;
   layout.add(boardView.container);
 
   const commands = buildCommandList(renderer, palette);
   layout.add(commands);
 
-  const input = buildCommandInput(renderer, palette);
+  const input = buildCommandInput(renderer, palette, {
+    onEnter: (cmd: string) => {
+      const normalized = cmd.trim().toLowerCase();
+      if (currentMode === 'start') {
+        if (normalized === ':start spider' || normalized === ':start' || normalized === 'start spider' || normalized === 'start') {
+          switchToGame();
+        }
+      } else if (currentMode === 'game') {
+        if (normalized === ':exit' || normalized === ':quit' || normalized === 'exit' || normalized === 'quit') {
+          switchToStart();
+        } else {
+          input.container.visible = false;
+        }
+      }
+      inCommandMode = false;
+      input.input.value = '';
+      input.input.blur();
+    },
+    onEscape: () => {
+      inCommandMode = false;
+      input.input.blur();
+      input.input.value = '';
+      if (currentMode === 'game') {
+        input.container.visible = false;
+      }
+      renderer.requestRender();
+    },
+  });
   layout.add(input.container);
 
   const statusBar = buildStatusBar(renderer, palette);
   layout.add(statusBar);
+
+  function switchToGame(): void {
+    currentMode = 'game';
+    header.visible = false;
+    commands.visible = false;
+    input.container.visible = false;
+    boardView.container.visible = true;
+    boardView.refresh();
+    inCommandMode = false;
+    renderer.requestRender();
+  }
+
+  function switchToStart(): void {
+    currentMode = 'start';
+    header.visible = true;
+    commands.visible = true;
+    input.container.visible = true;
+    boardView.container.visible = false;
+    inCommandMode = false;
+    renderer.requestRender();
+  }
+
+  renderer.keyInput.on('keypress', (key) => {
+    if (key.sequence === ':' && !inCommandMode) {
+      inCommandMode = true;
+      if (currentMode === 'game') {
+        input.container.visible = true;
+      }
+      input.input.focus();
+      input.input.value = '';
+      input.input.requestRender();
+      renderer.requestRender();
+      return;
+    }
+
+    if (inCommandMode && key.name === 'escape') {
+      inCommandMode = false;
+      input.input.blur();
+      input.input.value = '';
+      if (currentMode === 'game') {
+        input.container.visible = false;
+      }
+      renderer.requestRender();
+      return;
+    }
+  });
 
   renderer.start();
 }
@@ -130,7 +209,11 @@ function makeCommandRow(
   return row;
 }
 
-function buildCommandInput(renderer: any, palette: typeof themeColors) {
+function buildCommandInput(
+  renderer: any,
+  palette: typeof themeColors,
+  callbacks?: { onEnter?: (cmd: string) => void; onEscape?: () => void },
+) {
   const container = new BoxRenderable(renderer, {
     id: 'command-input',
     flexDirection: 'column',
@@ -143,25 +226,45 @@ function buildCommandInput(renderer: any, palette: typeof themeColors) {
 
   const prompt = new TextRenderable(renderer, {
     id: 'prompt',
-    content: '> how could I …',
+    content: '> start spider',
     fg: palette.text,
   });
 
   const caption = new TextRenderable(renderer, {
     id: 'caption',
-    content: 'enter send',
+    content: 'press : to enter command mode, enter to start',
     fg: palette.textMuted,
   });
 
   const input = new InputRenderable(renderer, {
     id: 'input',
     backgroundColor: palette.background,
-    textColor: palette.text,
+    textColor: '#ffffff',
     placeholderColor: palette.textMuted,
     cursorColor: palette.secondary,
-    focusedBackgroundColor: palette.background,
-    focusedTextColor: palette.text,
-    placeholder: 'type a command or ask a question…',
+    focusedBackgroundColor: palette.backgroundAlt,
+    focusedTextColor: '#ffffff',
+    placeholder: 'type :start spider or :start to begin…',
+    live: true,
+    height: 1,
+    onKeyDown: (key) => {
+      if (key.name === 'return') {
+        const cmd = input.value;
+        input.value = '';
+        callbacks?.onEnter?.(cmd);
+        renderer.requestRender();
+        key.preventDefault();
+      } else if (key.name === 'escape') {
+        callbacks?.onEscape?.();
+        key.preventDefault();
+      }
+      // Don't prevent default for other keys to allow normal input
+    },
+  });
+
+  // Listen to input events to ensure rendering
+  input.on('input', () => {
+    renderer.requestRender();
   });
 
   container.add(prompt);
