@@ -1,3 +1,6 @@
+import { GameState } from './game/gameState';
 import { startUi } from './ui/app';
 
-await startUi();
+const game = new GameState();
+
+await startUi(game);

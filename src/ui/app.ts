@@ -1,7 +1,9 @@
 import { createCliRenderer, BoxRenderable, TextRenderable, InputRenderable } from '@opentui/core';
+import { GameState } from '../game/gameState';
+import { createBoardView } from './components/BoardView';
 import { layoutMetrics, startScreenShortcuts, themeColors, type CommandShortcut } from './theme';
 
-export async function startUi() {
+export async function startUi(game: GameState) {
   const palette = themeColors;
   const renderer = await createCliRenderer({
     useAlternateScreen: true,
@@ -22,6 +24,9 @@ export async function startUi() {
 
   const header = buildHeader(renderer, palette);
   layout.add(header);
+
+  const boardView = createBoardView(renderer, game);
+  layout.add(boardView.container);
 
   const commands = buildCommandList(renderer, palette);
   layout.add(commands);
