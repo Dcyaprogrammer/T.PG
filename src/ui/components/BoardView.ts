@@ -1,4 +1,5 @@
 import { BoxRenderable, TextRenderable, type CliRenderer } from '@opentui/core';
+import cliBoxes from 'cli-boxes';
 import type { GameState } from '../../game/gameState';
 import { boardTheme, createBoardSnapshot, type BoardCard } from '../../game/board';
 import { Suit } from '../../game/card';
@@ -46,7 +47,7 @@ export function createBoardView(renderer: CliRenderer, game: GameState): BoardVi
       const colBox = new BoxRenderable(renderer, {
         id: `column-${column.index}`,
         flexDirection: 'column',
-        gap: 0,
+        gap: 0, // Cards will stack directly
         backgroundColor: boardTheme.backgroundAlt,
         border: true,
         borderColor: boardTheme.cardBorder,
@@ -108,18 +109,80 @@ export function createBoardView(renderer: CliRenderer, game: GameState): BoardVi
 }
 
 function createCardRenderable(renderer: CliRenderer, card: BoardCard): TextRenderable {
-  const content = card.faceUp ? formatFaceUpCard(card) : '[###]';
+  const cardLines = card.faceUp ? createFaceUpCard(card) : createFaceDownCard();
   return new TextRenderable(renderer, {
     id: `card-${card.id}`,
-    content,
-    fg: card.faceUp ? card.fg : boardTheme.textMuted,
+    content: cardLines,
+    fg: card.faceUp ? card.fg : boardTheme.yellow,
     bg: card.faceUp ? card.bg : boardTheme.cardFaceDownBg,
   });
 }
 
-function formatFaceUpCard(card: BoardCard): string {
+function createFaceUpCard(card: BoardCard): string {
   const suitSymbol = suitToSymbol(card.suit);
-  return `[${card.label}${suitSymbol}]`;
+  const rankLabel = card.label.length === 1 ? ` ${card.label}` : card.label;
+  const rankLabelRev = card.label.length === 1 ? `${card.label} ` : card.label;
+  
+  // Use cli-boxes for consistent, beautiful borders
+  const box = cliBoxes.round; // Rounded corners for modern look
+  const width = 7; // Inner width (excluding borders)
+  const horizontal = box.top.repeat(width);
+  
+  // Card dimensions: 9 chars wide (7 + 2 borders), 7 lines tall
+  const lines: string[] = [];
+  
+  // Top border
+  lines.push(`${box.topLeft}${horizontal}${box.topRight}`);
+  
+  // Top-left corner with rank and suit
+  const topContent = `${rankLabel}${suitSymbol}`.padEnd(width);
+  lines.push(`${box.left}${topContent}${box.right}`);
+  
+  // Middle lines
+  lines.push(`${box.left}${' '.repeat(width)}${box.right}`);
+  // Center symbol - properly centered
+  const centerPadding = Math.floor((width - 1) / 2);
+  const centerContent = ' '.repeat(centerPadding) + suitSymbol + ' '.repeat(width - centerPadding - 1);
+  lines.push(`${box.left}${centerContent}${box.right}`);
+  lines.push(`${box.left}${' '.repeat(width)}${box.right}`);
+  
+  // Bottom-right corner with rank and suit (upside down)
+  const bottomContent = `${suitSymbol}${rankLabelRev}`.padStart(width);
+  lines.push(`${box.left}${bottomContent}${box.right}`);
+  
+  // Bottom border
+  lines.push(`${box.bottomLeft}${horizontal}${box.bottomRight}`);
+  
+  return lines.join('\n');
+}
+
+function createFaceDownCard(): string {
+  // Face-down card with checkerboard pattern (yellow and dark pattern)
+  const box = cliBoxes.bold; // Bold borders for face-down cards to make them stand out
+  const width = 7; // Inner width
+  const horizontal = box.top.repeat(width);
+  
+  const lines: string[] = [];
+  
+  // Top border
+  lines.push(`${box.topLeft}${horizontal}${box.topRight}`);
+  
+  // Checkerboard pattern - alternating blocks
+  const patterns = ['█', '░'];
+  for (let i = 0; i < 5; i++) {
+    let line = box.left;
+    for (let j = 0; j < width; j++) {
+      const patternIndex = (i + j) % 2;
+      line += patterns[patternIndex];
+    }
+    line += box.right;
+    lines.push(line);
+  }
+  
+  // Bottom border
+  lines.push(`${box.bottomLeft}${horizontal}${box.bottomRight}`);
+  
+  return lines.join('\n');
 }
 
 function suitToSymbol(suit: BoardCard['suit']): string {

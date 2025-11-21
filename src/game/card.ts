@@ -1,5 +1,6 @@
 // follow spider card rules
-export const CARD_WIDTH = 10;
+// Card dimensions for ASCII art rendering: 9 chars wide, 7 lines tall
+export const CARD_WIDTH = 9;
 export const CARD_HEIGHT = 7;
 // A - K
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
