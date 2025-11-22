@@ -45,11 +45,22 @@ export interface BoardCard {
   bg: string;
   border: string;
   suit: Suit;
+  highlighted?: boolean; // Whether this card is highlighted for selection
+  selected?: boolean; // Whether this card is part of the selected stack
 }
 
 export interface BoardColumn {
   index: number;
   cards: BoardCard[];
+  focused?: boolean; // Whether this column has cursor focus
+  selected?: boolean; // Whether this column is selected as source
+}
+
+export interface SelectionState {
+  sourceColumn: number | null;
+  selectedCount: number | null;
+  targetColumn: number | null;
+  cursorColumn: number; // Current cursor position
 }
 
 export interface BoardSnapshot {
@@ -61,10 +72,16 @@ export interface BoardSnapshot {
   };
   completed: number;
   moves: number;
+  selection?: SelectionState;
 }
 
-export function createBoardSnapshot(state: GameState): BoardSnapshot {
-  const columns = state.tableau.map((pile, index) => buildColumn(pile, index));
+export function createBoardSnapshot(
+  state: GameState,
+  selection?: SelectionState,
+): BoardSnapshot {
+  const columns = state.tableau.map((pile, index) =>
+    buildColumn(pile, index, selection),
+  );
   return {
     theme: boardTheme,
     columns,
@@ -74,38 +91,60 @@ export function createBoardSnapshot(state: GameState): BoardSnapshot {
     },
     completed: state.completed.length,
     moves: state.moves.length,
+    selection,
   };
 }
 
-function buildColumn(pile: Pile, index: number): BoardColumn {
-  const cards = pile
-    .toArray()
-    .map((card) => toBoardCard(card));
-  return { index, cards };
-}
+function buildColumn(pile: Pile, index: number, selection?: SelectionState): BoardColumn {
+  const cards = pile.toArray();
+  const isSourceColumn = selection?.sourceColumn === index;
+  const isFocused = selection?.cursorColumn === index;
+  const selectedCount = isSourceColumn ? selection?.selectedCount ?? null : null;
 
-function toBoardCard(card: Card): BoardCard {
-  if (!card.faceUp) {
-    return {
-      id: card.id,
-      label: '###',
-      faceUp: false,
-      fg: boardTheme.textMuted,
-      bg: boardTheme.cardFaceDownBg,
-      border: boardTheme.cardBorder,
-      suit: card.suit,
-    };
-  }
+  const boardCards = cards.map((card, cardIndex) => {
+    const isSelected = isSourceColumn && selectedCount !== null
+      ? cardIndex >= cards.length - selectedCount
+      : false;
+    const isHighlighted = isFocused && cardIndex === cards.length - 1;
+
+    return toBoardCard(card, isSelected, isHighlighted);
+  });
 
   return {
-    id: card.id,
-    label: formatRank(card.rank),
-    faceUp: true,
-    fg: suitColor(card.suit),
-    bg: boardTheme.cardFaceUpBg,
-    border: boardTheme.cardBorder,
-    suit: card.suit,
+    index,
+    cards: boardCards,
+    focused: isFocused,
+    selected: isSourceColumn,
   };
+}
+
+function toBoardCard(
+  card: Card,
+  selected = false,
+  highlighted = false,
+): BoardCard {
+  const baseCard: BoardCard = {
+    id: card.id,
+    label: card.faceUp ? formatRank(card.rank) : '###',
+    faceUp: card.faceUp,
+    fg: card.faceUp ? suitColor(card.suit) : boardTheme.textMuted,
+    bg: card.faceUp ? boardTheme.cardFaceUpBg : boardTheme.cardFaceDownBg,
+    border: selected ? boardTheme.accent : highlighted ? boardTheme.yellow : boardTheme.cardBorder,
+    suit: card.suit,
+    selected,
+    highlighted,
+  };
+
+  // Apply highlight colors
+  if (selected) {
+    // Use a lighter version of the accent color for selected cards
+    baseCard.bg = boardTheme.backgroundAlt; // Lighter background
+    baseCard.border = boardTheme.accent;
+  } else if (highlighted) {
+    baseCard.border = boardTheme.yellow;
+  }
+
+  return baseCard;
 }
 
 function suitColor(suit: Suit): string {

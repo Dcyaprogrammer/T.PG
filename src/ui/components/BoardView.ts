@@ -1,12 +1,17 @@
 import { BoxRenderable, TextRenderable, type CliRenderer } from '@opentui/core';
 import cliBoxes from 'cli-boxes';
 import type { GameState } from '../../game/gameState';
-import { boardTheme, createBoardSnapshot, type BoardCard } from '../../game/board';
+import {
+  boardTheme,
+  createBoardSnapshot,
+  type BoardCard,
+  type SelectionState,
+} from '../../game/board';
 import { Suit } from '../../game/card';
 
 interface BoardView {
   container: BoxRenderable;
-  refresh: () => void;
+  refresh: (selection?: SelectionState) => void;
 }
 
 export function createBoardView(renderer: CliRenderer, game: GameState): BoardView {
@@ -37,29 +42,45 @@ export function createBoardView(renderer: CliRenderer, game: GameState): BoardVi
   container.add(columnsRow);
   container.add(statusRow);
 
-  function refresh(): void {
-    const snapshot = createBoardSnapshot(game);
+  function refresh(selection?: SelectionState): void {
+    const snapshot = createBoardSnapshot(game, selection);
 
     clearChildren(columnsRow);
     clearChildren(statusRow);
 
     for (const column of snapshot.columns) {
+      // Highlight column border if focused or selected
+      let borderColor = boardTheme.cardBorder;
+      if (column.selected) {
+        borderColor = boardTheme.accent;
+      } else if (column.focused) {
+        borderColor = boardTheme.yellow;
+      }
+
       const colBox = new BoxRenderable(renderer, {
         id: `column-${column.index}`,
         flexDirection: 'column',
         gap: 0, // Cards will stack directly
-        backgroundColor: boardTheme.backgroundAlt,
+        backgroundColor: column.focused ? boardTheme.backgroundAlt : boardTheme.backgroundAlt,
         border: true,
-        borderColor: boardTheme.cardBorder,
+        borderColor,
         padding: 0,
         paddingLeft: 1,
         paddingRight: 1,
       });
 
+      // Column title with indicator
+      let titleText = `Col ${column.index + 1}`;
+      if (column.selected) {
+        titleText = `→ ${titleText}`;
+      } else if (column.focused) {
+        titleText = `• ${titleText}`;
+      }
+
       const title = new TextRenderable(renderer, {
         id: `column-${column.index}-title`,
-        content: `Col ${column.index + 1}`,
-        fg: boardTheme.textMuted,
+        content: titleText,
+        fg: column.selected ? boardTheme.accent : column.focused ? boardTheme.yellow : boardTheme.textMuted,
       });
       colBox.add(title);
 
@@ -109,22 +130,40 @@ export function createBoardView(renderer: CliRenderer, game: GameState): BoardVi
 }
 
 function createCardRenderable(renderer: CliRenderer, card: BoardCard): TextRenderable {
-  const cardLines = card.faceUp ? createFaceUpCard(card) : createFaceDownCard();
+  // Use different border style based on selection state
+  let borderStyle = cliBoxes.round;
+  if (card.selected) {
+    borderStyle = cliBoxes.bold; // Bold border for selected cards
+  } else if (card.highlighted) {
+    borderStyle = cliBoxes.double; // Double border for highlighted card
+  }
+
+  const cardLines = card.faceUp
+    ? createFaceUpCard(card, borderStyle)
+    : createFaceDownCard(borderStyle);
+
+  // Apply background color for selected cards
+  let bgColor = card.faceUp ? card.bg : boardTheme.cardFaceDownBg;
+  if (card.selected) {
+    // Use a lighter background for selected cards
+    bgColor = boardTheme.backgroundAlt; // Lighter background to show selection
+  }
+
   return new TextRenderable(renderer, {
     id: `card-${card.id}`,
     content: cardLines,
     fg: card.faceUp ? card.fg : boardTheme.yellow,
-    bg: card.faceUp ? card.bg : boardTheme.cardFaceDownBg,
+    bg: bgColor,
   });
 }
 
-function createFaceUpCard(card: BoardCard): string {
+function createFaceUpCard(card: BoardCard, borderStyle = cliBoxes.round): string {
   const suitSymbol = suitToSymbol(card.suit);
   const rankLabel = card.label.length === 1 ? ` ${card.label}` : card.label;
   const rankLabelRev = card.label.length === 1 ? `${card.label} ` : card.label;
   
   // Use cli-boxes for consistent, beautiful borders
-  const box = cliBoxes.round; // Rounded corners for modern look
+  const box = borderStyle;
   const width = 7; // Inner width (excluding borders)
   const horizontal = box.top.repeat(width);
   
@@ -156,9 +195,9 @@ function createFaceUpCard(card: BoardCard): string {
   return lines.join('\n');
 }
 
-function createFaceDownCard(): string {
+function createFaceDownCard(borderStyle = cliBoxes.bold): string {
   // Face-down card with checkerboard pattern (yellow and dark pattern)
-  const box = cliBoxes.bold; // Bold borders for face-down cards to make them stand out
+  const box = borderStyle;
   const width = 7; // Inner width
   const horizontal = box.top.repeat(width);
   

@@ -1,6 +1,12 @@
 import { createCliRenderer, BoxRenderable, TextRenderable, InputRenderable } from '@opentui/core';
 import { GameState } from '../game/gameState';
 import { createBoardView } from './components/BoardView';
+import {
+  createGameInteractionState,
+  handleGameKey,
+  type GameInteractionState,
+  type KeyMapHandlers,
+} from './keymap';
 import { layoutMetrics, startScreenShortcuts, themeColors, type CommandShortcut } from './theme';
 
 type UiMode = 'start' | 'game';
@@ -26,6 +32,7 @@ export async function startUi(game: GameState) {
 
   let currentMode: UiMode = 'start';
   let inCommandMode = false;
+  let gameInteractionState: GameInteractionState = createGameInteractionState(game.columns);
 
   const header = buildHeader(renderer, palette);
   layout.add(header);
@@ -47,6 +54,15 @@ export async function startUi(game: GameState) {
       } else if (currentMode === 'game') {
         if (normalized === ':exit' || normalized === ':quit' || normalized === 'exit' || normalized === 'quit') {
           switchToStart();
+        } else if (normalized === ':deal' || normalized === 'deal') {
+          gameKeyHandlers.onDeal();
+          input.container.visible = false;
+        } else if (normalized === ':undo' || normalized === 'undo') {
+          gameKeyHandlers.onUndo();
+          input.container.visible = false;
+        } else if (normalized === ':redo' || normalized === 'redo') {
+          gameKeyHandlers.onRedo();
+          input.container.visible = false;
         } else {
           input.container.visible = false;
         }
@@ -76,10 +92,39 @@ export async function startUi(game: GameState) {
     commands.visible = false;
     input.container.visible = false;
     boardView.container.visible = true;
-    boardView.refresh();
+    gameInteractionState = createGameInteractionState(game.columns);
+    boardView.refresh(gameInteractionState.selection);
     inCommandMode = false;
     renderer.requestRender();
   }
+
+  function refreshGameView(): void {
+    boardView.refresh(gameInteractionState.selection);
+    renderer.requestRender();
+  }
+
+  const gameKeyHandlers: KeyMapHandlers = {
+    onMove: (fromCol: number, count: number, toCol: number) => {
+      const success = game.moveStack(fromCol, count, toCol);
+      if (success) {
+        refreshGameView();
+      }
+      return success;
+    },
+    onDeal: () => {
+      game.dealRow();
+      refreshGameView();
+    },
+    onUndo: () => {
+      // TODO: Implement undo
+      refreshGameView();
+    },
+    onRedo: () => {
+      // TODO: Implement redo
+      refreshGameView();
+    },
+    onRefresh: refreshGameView,
+  };
 
   function switchToStart(): void {
     currentMode = 'start';
@@ -92,6 +137,7 @@ export async function startUi(game: GameState) {
   }
 
   renderer.keyInput.on('keypress', (key) => {
+    // Command mode handling
     if (key.sequence === ':' && !inCommandMode) {
       inCommandMode = true;
       if (currentMode === 'game') {
@@ -112,6 +158,20 @@ export async function startUi(game: GameState) {
         input.container.visible = false;
       }
       renderer.requestRender();
+      return;
+    }
+
+    // Game mode keyboard handling
+    if (currentMode === 'game' && !inCommandMode) {
+      // Handle command shortcuts
+      if (key.ctrl && key.sequence === 'd') {
+        // Ctrl+D for deal
+        gameKeyHandlers.onDeal();
+        return;
+      }
+
+      // Handle game interaction keys
+      gameInteractionState = handleGameKey(key, gameInteractionState, game, gameKeyHandlers);
       return;
     }
   });
